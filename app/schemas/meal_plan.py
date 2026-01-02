@@ -1,4 +1,3 @@
-# app/schemas/meal_plan.py
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 
@@ -11,9 +10,9 @@ class MealItem(BaseModel):
     image_url: Optional[str] = None
 
 class DailyMealPlan(BaseModel):
-    day: str  # "Monday"
+    day: str
     total_calories: int
-    meals: Dict[str, MealItem]  # {"breakfast": {...}, "lunch": {...}}
+    meals: Dict[str, MealItem]
 
 class WeeklyMealPlanResponse(BaseModel):
     user_id: int

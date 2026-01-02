@@ -7,5 +7,5 @@ class FoodScanResult(BaseModel):
     protein: float
     carbs: float
     fats: float
-    health_score: int # 1-10 (10 is best)
-    warnings: list[str] = [] # ["High Sodium", "Added Sugar"]
+    health_score: int
+    warnings: list[str] = []

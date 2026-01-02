@@ -1,4 +1,3 @@
-# app/core/config.py
 from typing import List, Union
 from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings
@@ -6,18 +5,10 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Gym AI Service"
     API_V1_STR: str = "/api/v1"
-    
-    # Security
     JWT_SECRET: str
-    JWT_ALGORITHM: str = "HS256"  # <--- Renamed to match your .env
-    
-    # Database
+    JWT_ALGORITHM: str = "HS256"
     DATABASE_URL: str
-    
-    # External Services
     OPENAI_API_KEY: str | None = None
-    
-    # CORS
     ALLOWED_HOST_ORIGINS: List[Union[str, AnyHttpUrl]] = []
 
     @field_validator("ALLOWED_HOST_ORIGINS", mode="before")
@@ -32,6 +23,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
-        extra = "ignore" # This prevents crashing if .env has extra variables
+        extra = "ignore"
 
 settings = Settings()

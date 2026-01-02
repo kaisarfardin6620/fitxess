@@ -1,106 +1,107 @@
-# app/api/v1/endpoints/generation.py
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-
-# Database & Security
-from app.db.session import get_db
+from app.db.session import get_database
 from app.core.security import verify_token
-from app.db.models import User, Plan
-
-# Schemas
-from app.schemas.user_profile import UserProfileInput
-from app.schemas.dashboard_output import DashboardResponse
-
-# Business Logic (Services)
-from app.services.nutrition import calculator, symptom_analysis
+from app.services.nutrition import calculator, meal_generator
+from app.services.workout import generator as workout_generator
+from bson import ObjectId
+from datetime import datetime
 
 router = APIRouter()
 
-@router.post("/generate-plan", response_model=DashboardResponse)
-def generate_plan(
-    user_in: UserProfileInput,
-    db: Session = Depends(get_db),
-    token: dict = Depends(verify_token)
-):
-    """
-    Main AI Endpoint:
-    1. Validates User via Node.js JWT.
-    2. Calculates Macros (BMR/TDEE).
-    3. Calculates Hydration (from PDF formula).
-    4. Selects Micronutrient Targets (from PDF logic).
-    5. Analyzes Symptoms (Energy/Digestion scores).
-    6. Saves everything to the 'plans' table.
-    """
+@router.post("/generate-all")
+async def generate_all_plans(token: dict = Depends(verify_token)):
+    db = get_database()
+    user_id_str = token.get("id")
+    if not user_id_str:
+        raise HTTPException(status_code=401, detail="Invalid Token")
     
-    # 1. Get User ID from Token
-    user_id = token.get("id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid User ID in token")
+    user_oid = ObjectId(user_id_str)
 
-    # 2. Calculate Core Macros (Calories, Protein, Carbs, Fats)
-    macros = calculator.calculate_macros(
-        weight=user_in.weight, 
-        height=user_in.height, 
-        age=user_in.age, 
-        gender=user_in.gender, 
-        goal=user_in.goal, 
-        activity=user_in.activity_level
-    )
-    
-    # 3. Calculate Hydration (Logic from Page 6 of PDF)
-    # Note: If you add 'pregnancy' status to user input later, pass it here.
-    # We estimate 'activity_minutes' roughly based on workout_days * 45 mins / 7 days
-    avg_daily_activity_mins = (user_in.workout_days * 45) // 7
-    hydration_target = calculator.calculate_hydration(
-        weight_kg=user_in.weight,
-        activity_minutes=avg_daily_activity_mins,
-        condition="none" # Update this if you add pregnancy status to UserProfileInput
-    )
-    
-    # Add hydration to the macros dict to match the Response Schema
-    macros["hydration_ml"] = hydration_target
+    bio_info = await db.biologicalinformations.find_one({"userId": user_oid})
+    onboard = await db.onboardingassessments.find_one({"userId": user_oid})
+    quiz = await db.workoutonboardingquizzes.find_one({"userId": user_oid})
 
-    # 4. Get Micronutrient Targets (Logic from PDF Pages 1-6)
-    micro_targets = calculator.get_micronutrient_targets(
-        age=user_in.age, 
-        gender=user_in.gender, 
-        condition="none"
-    )
+    if not bio_info or not onboard:
+        raise HTTPException(status_code=400, detail="User onboarding incomplete")
 
-    # 5. Analyze Symptoms (Functional Health Scores)
-    # Checks for 'low_energy', 'bloating' etc. in the user's symptom list
-    functional_scores = symptom_analysis.analyze_symptoms(user_in.symptoms)
-    
-    # 6. Generate Simple Food Recommendations (Based on deficiencies)
-    # This is a basic logic placeholder. In the future, this can query your 'nutrients.csv'
-    recommended_foods = []
-    if "low_energy" in user_in.symptoms:
-        recommended_foods.append({"name": "Spinach", "reason": "Rich in Iron for Energy"})
-    if "bloating" in user_in.symptoms:
-        recommended_foods.append({"name": "Ginger Tea", "reason": "Aids Digestion"})
+    try:
+        age = int(bio_info.get("age", 25))
+        weight_kg = float(bio_info.get("weight", 70))
+        height_cm = float(bio_info.get("height", 170))
+    except:
+        age, weight_kg, height_cm = 25, 70.0, 170.0
 
-    # 7. Save to Database (Write-Only 'plans' table)
-    # We serialize the dictionaries to JSON for storage
-    new_plan = Plan(
-        user_id=int(user_id),
-        analysis_data=functional_scores,     # Stores the [Energy: 69, Digestion: 80]
-        nutrition_plan={
-            "macros": macros,
-            "micros": micro_targets,
-            "hydration": hydration_target
-        },
-        workout_plan={} # Populated by a separate call or added here if needed
-    )
+    gender = bio_info.get("gender", "male")
+    goal_list = onboard.get("fitnessGoal", ["maintain"])
+    goal = goal_list[0] if goal_list else "maintain"
+    activity = onboard.get("activityLevel", "moderate")
     
-    db.add(new_plan)
-    db.commit()
-    db.refresh(new_plan)
+    macro_result = calculator.calculate_macros(weight_kg, height_cm, age, gender, goal, activity)
     
-    # 8. Return JSON Response to App
-    return {
-        "user_id": int(user_id),
-        "daily_targets": macros,          # Includes Protein, Carbs, Fats, Cals, Hydration
-        "micronutrient_targets": micro_targets, # The "Minimum Targets" from PDF
-        "functional_scores": functional_scores, # The "69% Energy" scores
-        "recommended_foods": recommended_foods
+    hydra_result = calculator.calculate_hydration(weight_kg, 30, "none")
+    
+    micro_result = calculator.get_micronutrient_targets(age, gender, "none")
+
+    user_goals_data = {
+        "userId": user_oid,
+        "biologicalInformationId": bio_info["_id"],
+        "onboardingAssesmentId": onboard["_id"],
+        "date": datetime.utcnow(),
+        "calories": macro_result["calories"],
+        "macros": macro_result["macros"],
+        "waterIntake": hydra_result,
+        "categories": micro_result
     }
+    
+    await db.usergoals.insert_one(user_goals_data)
+
+    allergies = onboard.get("medicalConditions", []) 
+    prefs = onboard.get("foodTypes", [])
+    
+    generated_meals = meal_generator.generate_monthly_meals(
+        cals=macro_result["calories"]["target"],
+        protein=macro_result["macros"]["protein"]["target"],
+        allergies=allergies,
+        food_prefs=prefs
+    )
+
+    meal_plan_data = {
+        "userId": user_oid,
+        "biologicalInformationId": bio_info["_id"],
+        "onboardingAssesmentId": onboard["_id"],
+        "month": datetime.utcnow().month,
+        "year": datetime.utcnow().year,
+        "dailyMeals": generated_meals
+    }
+    
+    await db.usermonthlymealplans.insert_one(meal_plan_data)
+
+    workout_days_str = quiz.get("weeklyTraningDays", "3")
+    try:
+        w_days = int(workout_days_str.split()[0]) 
+    except:
+        w_days = 3
+
+    injuries = quiz.get("barriersToGymAccess", []) 
+    equip = quiz.get("availableEquipment", [])
+    w_goal = quiz.get("workoutPlanGoal", "strength")
+    
+    generated_workouts = workout_generator.generate_weekly_workout(
+        days_count=w_days,
+        injuries=injuries,
+        equipment=equip,
+        goal=w_goal,
+        level=quiz.get("currentActiveness", "beginner")
+    )
+
+    workout_plan_data = {
+        "userId": user_oid,
+        "onboardingAssesmentId": onboard["_id"],
+        "title": f"AI Plan for {w_goal}",
+        "weekStartDate": datetime.utcnow(),
+        "days": generated_workouts
+    }
+
+    await db.userweeklyworkoutplans.insert_one(workout_plan_data)
+
+    return {"status": "success", "message": "All plans generated and saved to MongoDB"}

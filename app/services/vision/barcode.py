@@ -1,4 +1,3 @@
-# app/services/vision/barcode.py
 import httpx
 
 async def fetch_product_by_barcode(barcode: str) -> dict:

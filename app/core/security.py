@@ -1,4 +1,3 @@
-# app/core/security.py
 from fastapi import HTTPException, Security, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
@@ -12,7 +11,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
         payload = jwt.decode(
             token,
             settings.JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM] # <--- Updated variable name
+            algorithms=[settings.JWT_ALGORITHM]
         )
         return payload
         

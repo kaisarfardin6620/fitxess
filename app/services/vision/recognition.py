@@ -1,4 +1,3 @@
-# app/services/vision/recognition.py
 import base64
 import json
 from openai import OpenAI
@@ -8,7 +7,6 @@ client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 def analyze_food_image(image_bytes: bytes) -> dict:
     if not settings.OPENAI_API_KEY:
-        # Mock response if no key provided
         return {"name": "Test Food", "calories": 100, "protein": 5, "carbs": 10, "fats": 2}
 
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
@@ -28,7 +26,6 @@ def analyze_food_image(image_bytes: bytes) -> dict:
             max_tokens=300,
         )
         content = response.choices[0].message.content
-        # Clean potential markdown wrappers
         content = content.replace("```json", "").replace("```", "").strip()
         return json.loads(content)
     except Exception as e:

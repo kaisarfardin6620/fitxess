@@ -1,8 +1,3 @@
-# app/core/nutrition_rules.py
-
-# Data derived from "Hydration/Micronutrient" PDF
-# Values represent the Daily RDA or AI (Minimum Target)
-
 MICRONUTRIENT_GUIDELINES = {
     "child_9_13": {
         "B1": 0.9, "B2": 0.9, "B3": 12, "B5": 4, "B6": 1.0, 
@@ -39,7 +34,6 @@ MICRONUTRIENT_GUIDELINES = {
         "B9": 400, "B12": 2.4, "Vitamin D": 15, "Iron": 8, 
         "Magnesium": 320, "Zinc": 8
     },
-    # Special Conditions
     "pregnancy": {
         "B1": 1.4, "B2": 1.4, "B3": 18, "B5": 6, "B6": 1.9, 
         "B9": 600, "B12": 2.6, "Vitamin D": 15, "Iron": 27, 
@@ -50,4 +44,11 @@ MICRONUTRIENT_GUIDELINES = {
         "B9": 500, "B12": 2.8, "Vitamin D": 15, "Iron": 9, 
         "Magnesium": 310, "Zinc": 12
     }
+}
+
+STANDARD_LIMITS = {
+    "sugar": 30,
+    "sodium": 2300,
+    "fiber": 28,
+    "saturatedFat": 20 
 }

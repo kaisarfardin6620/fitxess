@@ -1,4 +1,3 @@
-# app/services/nlp/voice_parser.py
 from openai import OpenAI
 from app.core.config import settings
 import json
@@ -6,9 +5,6 @@ import json
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 def parse_voice_log(text_transcript: str) -> dict:
-    """
-    Takes text (e.g., 'I ate two boiled eggs') and returns structured JSON.
-    """
     if not settings.OPENAI_API_KEY:
         return {"items": [{"name": "Mock Item", "calories": 0}]}
 

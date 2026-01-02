@@ -1,42 +1,51 @@
-from app.db.models import Exercise
-from sqlalchemy.orm import Session
-import random
+import json
+from openai import OpenAI
+from app.core.config import settings
 
-def generate_weekly_plan(db: Session, days: int, injuries: list[str], equipment: list[str]):
-    # Define splits based on available days
-    if days == 3:
-        split = ["Full Body", "Full Body", "Full Body"]
-    elif days == 4:
-        split = ["Upper", "Lower", "Rest", "Upper", "Lower"]
-    else:
-        split = ["Push", "Pull", "Legs", "Upper", "Lower"]
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-    weekly_schedule = []
+def generate_weekly_workout(days_count: int, injuries: list, equipment: list, goal: str, level: str) -> dict:
+    if not settings.OPENAI_API_KEY:
+        return {}
+
+    prompt = f"""
+    Create a weekly workout plan.
+    Days per week: {days_count}. Goal: {goal}. Level: {level}.
+    Equipment: {equipment}. Injuries to avoid: {injuries}.
     
-    for day_name in split:
-        if day_name == "Rest":
-            continue
-            
-        # Logic: Fetch exercises from DB filtering by muscle group
-        # This is a simplified version. In real implementation, you'd use complex SQL queries.
-        daily_routine = {
-            "day": "Day " + str(len(weekly_schedule) + 1),
-            "focus": day_name,
-            "exercises": []
-        }
-        
-        # Mocking fetching 3 exercises per day for now
-        # In reality, you query: db.query(Exercise).filter(...)
-        daily_routine["exercises"].append({
-            "id": 1, 
-            "name": f"{day_name} Primary Move",
-            "muscle_group": day_name,
-            "target": {"sets": 4, "reps": "8-10"}
-        })
-        
-        weekly_schedule.append(daily_routine)
-        
-    return {
-        "plan_name": f"{days} Day Customized Split",
-        "schedule": weekly_schedule
-    }
+    Return ONLY JSON matching this Mongoose schema for 'days' array:
+    [
+      {{
+        "title": "Leg Day",
+        "workoutType": "strength",
+        "intensity": "high",
+        "estimatedCaloriesBurn": 400,
+        "exercises": [
+          {{
+            "name": "Squats",
+            "muscleGroups": ["legs", "glutes"],
+            "durationMin": 10,
+            "sets": 3,
+            "reps": 12,
+            "restSeconds": 60,
+            "weight": 0,
+            "isComplited": false
+          }}
+        ],
+        "isComplited": false
+      }}
+    ]
+    Generate {days_count} days.
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"}
+    )
+    
+    try:
+        content = json.loads(response.choices[0].message.content)
+        return content.get("days", [])
+    except:
+        return []

@@ -1,33 +1,41 @@
-# app/services/nutrition/meal_generator.py
-from typing import List
-from app.schemas.meal_plan import DailyMealPlan, MealItem
+import json
+from openai import OpenAI
+from app.core.config import settings
 
-def generate_weekly_meals(target_macros: dict, preferences: List[str] = []) -> List[DailyMealPlan]:
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+def generate_monthly_meals(cals: int, protein: int, allergies: list, food_prefs: list) -> list:
+    if not settings.OPENAI_API_KEY:
+        return []
+
+    prompt = f"""
+    Generate a 3-day sample meal plan to repeat for a month.
+    Targets: {cals} kcal, {protein}g Protein.
+    Restrictions: {allergies}, Preferences: {food_prefs}.
+    
+    Return ONLY JSON matching this Mongoose schema structure for 'dailyMeals':
+    [
+      {{
+        "date": "2025-01-01T00:00:00.000Z",
+        "mealType": "breakfast",
+        "foods": [ {{ "name": "Oats", "calories": 300, "protein": 10, "carbs": 50, "fat": 5 }} ],
+        "notes": "High fiber"
+      }},
+      {{ "mealType": "lunch", ... }},
+      {{ "mealType": "dinner", ... }},
+      {{ "mealType": "snacks", ... }}
+    ]
+    Repeat this structure for 3 full days (Breakfast/Lunch/Dinner/Snacks for each day).
     """
-    Generates a mock 7-day plan based on target calories.
-    In production, this queries your FoodDB.
-    """
-    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    schedule = []
 
-    # Simple logic to split calories roughly
-    cals = target_macros.get("calories", 2000)
-    bf_cals = int(cals * 0.25)
-    ln_cals = int(cals * 0.35)
-    dn_cals = int(cals * 0.30)
-    sn_cals = int(cals * 0.10)
-
-    for day in days:
-        daily_plan = DailyMealPlan(
-            day=day,
-            total_calories=cals,
-            meals={
-                "breakfast": MealItem(name="Oatmeal & Berries", calories=bf_cals, protein=15, carbs=40, fats=5),
-                "lunch": MealItem(name="Grilled Chicken Salad", calories=ln_cals, protein=40, carbs=10, fats=15),
-                "dinner": MealItem(name="Salmon & Quinoa", calories=dn_cals, protein=35, carbs=30, fats=20),
-                "snack": MealItem(name="Greek Yogurt", calories=sn_cals, protein=12, carbs=8, fats=0),
-            }
-        )
-        schedule.append(daily_plan)
-        
-    return schedule
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"}
+    )
+    
+    try:
+        content = json.loads(response.choices[0].message.content)
+        return content.get("dailyMeals", [])
+    except:
+        return []

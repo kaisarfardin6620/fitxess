@@ -10,7 +10,6 @@ async def scan_barcode_endpoint(code: str):
     if not data:
         raise HTTPException(status_code=404, detail="Product not found")
         
-    # Calculate health score (Mock logic)
     score = 10
     if data["fats"] > 20: score -= 2
     
@@ -29,8 +28,6 @@ async def scan_photo_endpoint(file: UploadFile = File(...)):
     contents = await file.read()
     ai_result = recognition.analyze_food_image(contents)
     
-    # Note: parsing the AI string to JSON happens here in production
-    # For now, we return a mock success structure
     return {
         "name": "AI Identified Food",
         "calories": 300,

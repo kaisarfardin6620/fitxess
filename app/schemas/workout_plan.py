@@ -3,8 +3,8 @@ from typing import List, Optional
 
 class ExerciseSet(BaseModel):
     sets: int
-    reps: str # "8-12"
-    weight_suggestion: Optional[str] = None # "Start with 10kg"
+    reps: str
+    weight_suggestion: Optional[str] = None
 
 class ExerciseDetail(BaseModel):
     id: int
@@ -14,10 +14,10 @@ class ExerciseDetail(BaseModel):
     target: ExerciseSet
 
 class DailyWorkout(BaseModel):
-    day: str # "Monday"
-    focus: str # "Push", "Legs"
+    day: str
+    focus: str
     exercises: List[ExerciseDetail]
 
 class WeeklyPlanResponse(BaseModel):
-    plan_name: str # "3 Day Split - Fat Loss"
+    plan_name: str
     schedule: List[DailyWorkout]
