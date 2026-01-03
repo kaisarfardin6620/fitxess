@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from app.db.session import get_database
 from app.core.security import verify_token
 from app.schemas.onboarding_input import BiologicalInfoSchema, AssessmentSchema, WorkoutQuizSchema

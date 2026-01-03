@@ -4,16 +4,16 @@ from app.core.config import settings
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-def generate_weekly_workout(days_count: int, injuries: list, equipment: list, goal: str, level: str) -> dict:
+def generate_weekly_workout(days_count: int, injuries: list, equipment: list, goal: str, level: str) -> list:
     if not settings.OPENAI_API_KEY:
-        return {}
+        return []
 
     prompt = f"""
     Create a weekly workout plan.
     Days per week: {days_count}. Goal: {goal}. Level: {level}.
     Equipment: {equipment}. Injuries to avoid: {injuries}.
     
-    Return ONLY JSON matching this Mongoose schema for 'days' array:
+    Return ONLY JSON matching this structure:
     [
       {{
         "title": "Leg Day",
@@ -23,19 +23,17 @@ def generate_weekly_workout(days_count: int, injuries: list, equipment: list, go
         "exercises": [
           {{
             "name": "Squats",
-            "muscleGroups": ["legs", "glutes"],
+            "muscleGroups": ["legs"],
             "durationMin": 10,
             "sets": 3,
             "reps": 12,
             "restSeconds": 60,
-            "weight": 0,
-            "isComplited": false
+            "weight": 20
           }}
-        ],
-        "isComplited": false
+        ]
       }}
     ]
-    Generate {days_count} days.
+    Generate exactly {days_count} days.
     """
 
     response = client.chat.completions.create(
@@ -46,6 +44,6 @@ def generate_weekly_workout(days_count: int, injuries: list, equipment: list, go
     
     try:
         content = json.loads(response.choices[0].message.content)
-        return content.get("days", [])
+        return content.get("days", content if isinstance(content, list) else [])
     except:
         return []

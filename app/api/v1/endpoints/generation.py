@@ -4,7 +4,7 @@ from app.core.security import verify_token
 from app.services.nutrition import calculator, meal_generator
 from app.services.workout import generator as workout_generator
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime, timedelta
 
 router = APIRouter()
 
@@ -37,46 +37,98 @@ async def generate_all_plans(token: dict = Depends(verify_token)):
     activity = onboard.get("activityLevel", "moderate")
     
     macro_result = calculator.calculate_macros(weight_kg, height_cm, age, gender, goal, activity)
-    
     hydra_result = calculator.calculate_hydration(weight_kg, 30, "none")
-    
     micro_result = calculator.get_micronutrient_targets(age, gender, "none")
 
     user_goals_data = {
         "userId": user_oid,
         "biologicalInformationId": bio_info["_id"],
-        "onboardingAssesmentId": onboard["_id"],
+        "onboardingAssessmentId": onboard["_id"],
         "date": datetime.utcnow(),
         "calories": macro_result["calories"],
         "macros": macro_result["macros"],
-        "waterIntake": hydra_result,
-        "categories": micro_result
+        "waterIntake": hydra_result
     }
     
-    await db.usergoals.insert_one(user_goals_data)
+    goals_insert = await db.usergoals.insert_one(user_goals_data)
+    goals_id = goals_insert.inserted_id
+
+    category_docs = []
+    for cat_name, items in micro_result.items():
+        if cat_name not in ['energy', 'digestion', 'immunity']:
+            continue
+        for item in items:
+            category_docs.append({
+                "goalsId": goals_id,
+                "userId": user_oid,
+                "category": cat_name,
+                "name": item["name"],
+                "target": item["target"],
+                "consumed": 0,
+                "isGoodIfHigh": item.get("isGoodIfHight", True)
+            })
+    
+    if category_docs:
+        await db.categoryitems.insert_many(category_docs)
 
     allergies = onboard.get("medicalConditions", []) 
     prefs = onboard.get("foodTypes", [])
     
-    generated_meals = meal_generator.generate_monthly_meals(
+    generated_days_data = meal_generator.generate_monthly_meals(
         cals=macro_result["calories"]["target"],
         protein=macro_result["macros"]["protein"]["target"],
         allergies=allergies,
         food_prefs=prefs
     )
 
-    meal_plan_data = {
+    monthly_plan_data = {
         "userId": user_oid,
         "biologicalInformationId": bio_info["_id"],
-        "onboardingAssesmentId": onboard["_id"],
+        "onboardingAssessmentId": onboard["_id"],
         "month": datetime.utcnow().month,
-        "year": datetime.utcnow().year,
-        "dailyMeals": generated_meals
+        "year": datetime.utcnow().year
     }
     
-    await db.usermonthlymealplans.insert_one(meal_plan_data)
+    monthly_insert = await db.usermonthlymealplans.insert_one(monthly_plan_data)
+    monthly_id = monthly_insert.inserted_id
 
-    workout_days_str = quiz.get("weeklyTraningDays", "3")
+    for day_data in generated_days_data:
+        day_offset = day_data.get("dayOffset", 0)
+        current_date = datetime.utcnow() + timedelta(days=day_offset)
+        
+        meals_list = day_data.get("meals", [])
+        if not isinstance(meals_list, list): 
+            continue
+
+        for meal in meals_list:
+            daily_doc = {
+                "mealPlanId": monthly_id,
+                "userId": user_oid,
+                "date": current_date,
+                "mealType": meal.get("mealType", "snacks"),
+                "notes": meal.get("notes", "")
+            }
+            daily_insert = await db.userdailymealplans.insert_one(daily_doc)
+            daily_id = daily_insert.inserted_id
+            
+            foods = meal.get("foods", [])
+            food_docs = []
+            for f in foods:
+                food_docs.append({
+                    "mealPlanId": monthly_id,
+                    "mealDayId": daily_id,
+                    "userId": user_oid,
+                    "name": f.get("name"),
+                    "calories": f.get("calories"),
+                    "protein": f.get("protein"),
+                    "carbs": f.get("carbs"),
+                    "fat": f.get("fat")
+                })
+            
+            if food_docs:
+                await db.fooditems.insert_many(food_docs)
+
+    workout_days_str = quiz.get("weeklyTrainingDays", "3")
     try:
         w_days = int(workout_days_str.split()[0]) 
     except:
@@ -96,12 +148,48 @@ async def generate_all_plans(token: dict = Depends(verify_token)):
 
     workout_plan_data = {
         "userId": user_oid,
-        "onboardingAssesmentId": onboard["_id"],
+        "onboardingAssessmentId": onboard["_id"],
         "title": f"AI Plan for {w_goal}",
         "weekStartDate": datetime.utcnow(),
-        "days": generated_workouts
+        "weekEndDate": datetime.utcnow() + timedelta(days=7)
     }
 
-    await db.userweeklyworkoutplans.insert_one(workout_plan_data)
+    weekly_insert = await db.userweeklyworkoutplans.insert_one(workout_plan_data)
+    weekly_id = weekly_insert.inserted_id
 
-    return {"status": "success", "message": "All plans generated and saved to MongoDB"}
+    if isinstance(generated_workouts, list):
+        for w_session in generated_workouts:
+            session_doc = {
+                "workoutPlanId": weekly_id,
+                "userId": user_oid,
+                "title": w_session.get("title", "Workout"),
+                "workoutType": w_session.get("workoutType", "strength"),
+                "intensity": w_session.get("intensity", "medium"),
+                "estimatedCaloriesBurn": w_session.get("estimatedCaloriesBurn", 300),
+                "isCompleted": False
+            }
+            
+            session_insert = await db.dailyworkoutsessions.insert_one(session_doc)
+            session_id = session_insert.inserted_id
+            
+            exercises = w_session.get("exercises", [])
+            ex_docs = []
+            for ex in exercises:
+                ex_docs.append({
+                    "workoutSessionId": session_id,
+                    "workoutPlanId": weekly_id,
+                    "userId": user_oid,
+                    "name": ex.get("name"),
+                    "muscleGroups": ex.get("muscleGroups", []),
+                    "durationMin": ex.get("durationMin"),
+                    "sets": ex.get("sets"),
+                    "reps": ex.get("reps"),
+                    "restSeconds": ex.get("restSeconds"),
+                    "weight": ex.get("weight"),
+                    "isCompleted": False
+                })
+            
+            if ex_docs:
+                await db.exercises.insert_many(ex_docs)
+
+    return {"status": "success", "message": "All plans generated and normalized to MongoDB"}

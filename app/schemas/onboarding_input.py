@@ -23,13 +23,13 @@ class AssessmentSchema(BaseModel):
 
 class WorkoutQuizSchema(BaseModel):
     currentActiveness: str
-    exeriseWantAdd: Optional[str] = None
-    consistentlyWorkoutPriod: Optional[str] = None
+    exerciseWantAdd: Optional[str] = None
+    consistentlyWorkoutPeriod: Optional[str] = None
     workoutPlanGoal: str
-    bordyPartOfImprovement: Optional[str] = None
-    currentWorkoutPlase: Optional[str] = None
+    bodyPartOfImprovement: Optional[str] = None
+    currentWorkoutPlace: Optional[str] = None
     isAbleToGoGym: str
     barriersToGymAccess: List[str] = []
     availableEquipment: List[str] = []
-    weeklyTraningDays: str
+    weeklyTrainingDays: str
     workoutSession: Optional[str] = None
