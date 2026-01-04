@@ -5,6 +5,7 @@ from app.services.nutrition import calculator, meal_generator
 from app.services.workout import generator as workout_generator
 from bson import ObjectId
 from datetime import datetime, timedelta
+import calendar
 
 router = APIRouter()
 
@@ -74,59 +75,69 @@ async def generate_all_plans(token: dict = Depends(verify_token)):
     allergies = onboard.get("medicalConditions", []) 
     prefs = onboard.get("foodTypes", [])
     
-    generated_days_data = meal_generator.generate_monthly_meals(
+    generated_week_cycle = meal_generator.generate_monthly_meals(
         cals=macro_result["calories"]["target"],
         protein=macro_result["macros"]["protein"]["target"],
         allergies=allergies,
         food_prefs=prefs
     )
 
+    now = datetime.utcnow()
+    current_month = now.month
+    current_year = now.year
+    _, days_in_month = calendar.monthrange(current_year, current_month)
+
     monthly_plan_data = {
         "userId": user_oid,
         "biologicalInformationId": bio_info["_id"],
         "onboardingAssessmentId": onboard["_id"],
-        "month": datetime.utcnow().month,
-        "year": datetime.utcnow().year
+        "month": current_month,
+        "year": current_year
     }
     
     monthly_insert = await db.usermonthlymealplans.insert_one(monthly_plan_data)
     monthly_id = monthly_insert.inserted_id
 
-    for day_data in generated_days_data:
-        day_offset = day_data.get("dayOffset", 0)
-        current_date = datetime.utcnow() + timedelta(days=day_offset)
-        
-        meals_list = day_data.get("meals", [])
-        if not isinstance(meals_list, list): 
-            continue
+    if generated_week_cycle:
+        for day_num in range(1, days_in_month + 1):
+            date_obj = datetime(current_year, current_month, day_num)
+            cycle_index = (day_num - 1) % 7
+            if cycle_index >= len(generated_week_cycle):
+                cycle_index = 0
+            
+            day_template = generated_week_cycle[cycle_index]
+            meals_list = day_template.get("meals", [])
+            
+            if not isinstance(meals_list, list): 
+                continue
 
-        for meal in meals_list:
-            daily_doc = {
-                "mealPlanId": monthly_id,
-                "userId": user_oid,
-                "date": current_date,
-                "mealType": meal.get("mealType", "snacks"),
-                "notes": meal.get("notes", "")
-            }
-            daily_insert = await db.userdailymealplans.insert_one(daily_doc)
-            daily_id = daily_insert.inserted_id
-            
-            foods = meal.get("foods", [])
-            food_docs = []
-            for f in foods:
-                food_docs.append({
+            for meal in meals_list:
+                daily_doc = {
                     "mealPlanId": monthly_id,
-                    "mealDayId": daily_id,
                     "userId": user_oid,
-                    "name": f.get("name"),
-                    "calories": f.get("calories"),
-                    "protein": f.get("protein"),
-                    "carbs": f.get("carbs"),
-                    "fat": f.get("fat")
-                })
-            
-            if food_docs:
-                await db.fooditems.insert_many(food_docs)
+                    "date": date_obj,
+                    "mealType": meal.get("mealType", "snacks"),
+                    "notes": meal.get("notes", "")
+                }
+                daily_insert = await db.userdailymealplans.insert_one(daily_doc)
+                daily_id = daily_insert.inserted_id
+                
+                foods = meal.get("foods", [])
+                food_docs = []
+                for f in foods:
+                    food_docs.append({
+                        "mealPlanId": monthly_id,
+                        "mealDayId": daily_id,
+                        "userId": user_oid,
+                        "name": f.get("name"),
+                        "calories": f.get("calories"),
+                        "protein": f.get("protein"),
+                        "carbs": f.get("carbs"),
+                        "fat": f.get("fat")
+                    })
+                
+                if food_docs:
+                    await db.fooditems.insert_many(food_docs)
 
     workout_days_str = quiz.get("weeklyTrainingDays", "3")
     try:
@@ -150,8 +161,8 @@ async def generate_all_plans(token: dict = Depends(verify_token)):
         "userId": user_oid,
         "onboardingAssessmentId": onboard["_id"],
         "title": f"AI Plan for {w_goal}",
-        "weekStartDate": datetime.utcnow(),
-        "weekEndDate": datetime.utcnow() + timedelta(days=7)
+        "weekStartDate": now,
+        "weekEndDate": now + timedelta(days=7)
     }
 
     weekly_insert = await db.userweeklyworkoutplans.insert_one(workout_plan_data)
@@ -192,4 +203,4 @@ async def generate_all_plans(token: dict = Depends(verify_token)):
             if ex_docs:
                 await db.exercises.insert_many(ex_docs)
 
-    return {"status": "success", "message": "All plans generated and normalized to MongoDB"}
+    return {"status": "success", "message": "Full monthly meal plan and weekly workout plan generated."}

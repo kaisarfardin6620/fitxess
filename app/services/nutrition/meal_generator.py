@@ -9,14 +9,14 @@ def generate_monthly_meals(cals: int, protein: int, allergies: list, food_prefs:
         return []
 
     prompt = f"""
-    Generate a 3-day sample meal plan.
+    Generate a 7-DAY MEAL PLAN (1 Week Cycle).
     Targets: {cals} kcal, {protein}g Protein.
     Restrictions: {allergies}, Preferences: {food_prefs}.
     
     Return ONLY JSON matching this structure:
     [
       {{
-        "dayOffset": 0,
+        "dayIndex": 0,
         "meals": [
           {{
             "mealType": "breakfast",
@@ -27,10 +27,9 @@ def generate_monthly_meals(cals: int, protein: int, allergies: list, food_prefs:
           {{ "mealType": "dinner", "foods": [...] }},
           {{ "mealType": "snacks", "foods": [...] }}
         ]
-      }},
-      {{ "dayOffset": 1, "meals": [...] }},
-      {{ "dayOffset": 2, "meals": [...] }}
+      }}
     ]
+    Generate exactly 7 days (Index 0 to 6).
     """
 
     response = client.chat.completions.create(
