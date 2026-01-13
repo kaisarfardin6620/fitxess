@@ -20,7 +20,7 @@ async def scan_barcode_endpoint(code: str):
         "carbs": data["carbs"],
         "fats": data["fats"],
         "health_score": score,
-        "warnings": data["warnings"]
+        "warnings": data.get("warnings", [])
     }
 
 @router.post("/scan-photo")

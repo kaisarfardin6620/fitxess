@@ -13,37 +13,43 @@ def generate_weekly_workout(days_count: int, injuries: list, equipment: list, go
     Days per week: {days_count}. Goal: {goal}. Level: {level}.
     Equipment: {equipment}. Injuries to avoid: {injuries}.
     
-    Return ONLY JSON matching this structure:
-    [
-      {{
-        "title": "Leg Day",
-        "workoutType": "strength",
-        "intensity": "high",
-        "estimatedCaloriesBurn": 400,
-        "exercises": [
-          {{
-            "name": "Squats",
-            "muscleGroups": ["legs"],
-            "durationMin": 10,
-            "sets": 3,
-            "reps": 12,
-            "restSeconds": 60,
-            "weight": 20
-          }}
-        ]
-      }}
-    ]
+    Return a JSON OBJECT with a key "days" containing a list.
+    Structure:
+    {{
+      "days": [
+        {{
+            "title": "Leg Day",
+            "workoutType": "strength",
+            "intensity": "high",
+            "estimatedCaloriesBurn": 400,
+            "exercises": [
+              {{
+                "name": "Squats",
+                "muscleGroups": ["legs"],
+                "durationMin": 10,
+                "sets": 3,
+                "reps": 12,
+                "restSeconds": 60,
+                "weight": 20
+              }}
+            ]
+        }}
+      ]
+    }}
     Generate exactly {days_count} days.
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"}
-    )
-    
     try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+
+
         content = json.loads(response.choices[0].message.content)
-        return content.get("days", content if isinstance(content, list) else [])
-    except:
+        return content.get("days", [])
+        
+    except Exception as e:
+        print(f"DEBUG WORKOUT ERROR: {e}")
         return []

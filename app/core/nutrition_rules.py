@@ -50,5 +50,5 @@ STANDARD_LIMITS = {
     "sugar": 30,
     "sodium": 2300,
     "fiber": 28,
-    "saturatedFat": 20 
+    "saturatedFat": 20
 }

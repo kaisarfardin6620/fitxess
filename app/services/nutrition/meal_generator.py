@@ -6,6 +6,7 @@ client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 def generate_monthly_meals(cals: int, protein: int, allergies: list, food_prefs: list) -> list:
     if not settings.OPENAI_API_KEY:
+        print("DEBUG: API Key missing")
         return []
 
     prompt = f"""
@@ -13,33 +14,39 @@ def generate_monthly_meals(cals: int, protein: int, allergies: list, food_prefs:
     Targets: {cals} kcal, {protein}g Protein.
     Restrictions: {allergies}, Preferences: {food_prefs}.
     
-    Return ONLY JSON matching this structure:
-    [
-      {{
-        "dayIndex": 0,
-        "meals": [
-          {{
-            "mealType": "breakfast",
-            "notes": "Quick prep",
-            "foods": [ {{ "name": "Oats", "calories": 300, "protein": 10, "carbs": 50, "fat": 5 }} ]
-          }},
-          {{ "mealType": "lunch", "foods": [...] }},
-          {{ "mealType": "dinner", "foods": [...] }},
-          {{ "mealType": "snacks", "foods": [...] }}
-        ]
-      }}
-    ]
+    Return a JSON OBJECT with a key "days" containing a list.
+    Structure:
+    {{
+      "days": [
+        {{
+            "dayIndex": 0,
+            "meals": [
+              {{
+                "mealType": "breakfast",
+                "notes": "Quick prep",
+                "foods": [ {{ "name": "Oats", "calories": 300, "protein": 10, "carbs": 50, "fat": 5 }} ]
+              }},
+              {{ "mealType": "lunch", "foods": [...] }},
+              {{ "mealType": "dinner", "foods": [...] }},
+              {{ "mealType": "snacks", "foods": [...] }}
+            ]
+        }}
+      ]
+    }}
     Generate exactly 7 days (Index 0 to 6).
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"}
-    )
-    
     try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        
+
         content = json.loads(response.choices[0].message.content)
-        return content.get("days", content if isinstance(content, list) else [])
-    except:
+        return content.get("days", [])
+        
+    except Exception as e:
+        print(f"DEBUG MEAL ERROR: {e}")
         return []
